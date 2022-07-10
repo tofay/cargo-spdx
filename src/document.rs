@@ -17,23 +17,6 @@ use url::Url;
 
 pub const NOASSERTION: &str = "NOASSERTION";
 
-/// Build a new SPDX document based on collected information.
-pub fn build(host_url: &str, output_file_name: &str) -> Result<Document> {
-    Ok(builder(host_url, output_file_name)?.build()?)
-}
-
-/// Build a new SPDX document based on collected information.
-pub fn builder(host_url: &str, output_file_name: &str) -> Result<DocumentBuilder> {
-    log::info!(target: "cargo_spdx", "building the document");
-
-    let mut builder = DocumentBuilder::default();
-    builder
-        .document_name(output_file_name)
-        .try_document_namespace(host_url)?
-        .creation_info(get_creation_info()?);
-    Ok(builder)
-}
-
 /// Identify the creator(s) of the SBOM.
 pub fn get_creation_info() -> Result<CreationInfo> {
     let mut creator = vec![];
