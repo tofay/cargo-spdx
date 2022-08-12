@@ -1,7 +1,6 @@
 //! Writes the flat file format out.
-
-use crate::document::Document;
 use anyhow::Result;
+use spdx_rs::models::SPDX;
 use std::io::Write;
 
 /// Convenience macro to provide uniform field-writing syntax.
@@ -43,20 +42,44 @@ macro_rules! write_field {
 }
 
 /// Write the document out to the provided writer.
-pub fn write<W: Write>(mut w: W, doc: &Document) -> Result<()> {
+pub fn write<W: Write>(mut w: W, doc: &SPDX) -> Result<()> {
     log::info!(target: "cargo_spdx", "writing out file in key-value format");
 
-    write_field!(w, "SPDXVersion: {}", doc.spdx_version);
-    write_field!(w, "DataLicense: {}", doc.data_license);
-    write_field!(w, "SPDXID: {}", doc.spdx_identifier);
-    write_field!(w, "DocumentName: {}", doc.document_name);
-    write_field!(w, "DocumentNamespace: {}", doc.document_namespace);
-    write_field!(@opt, w, "ExternalDocumentRef: {}", doc.external_document_reference);
-    write_field!(@opt, w, "LicenseListVersion: {}", doc.creation_info.license_list_version);
-    write_field!(@optall, w, "Creator: {}", doc.creation_info.creators);
-    write_field!(w, "Created: {}", doc.creation_info.created);
-    write_field!(@opt, w, "CreatorComment: {}", doc.creation_info.comment);
-    write_field!(@opt, w, "DocumentComment: {}", doc.document_comment);
+    write_field!(
+        w,
+        "SPDXVersion: {}",
+        doc.document_creation_information.spdx_version
+    );
+    write_field!(
+        w,
+        "DataLicense: {}",
+        doc.document_creation_information.data_license
+    );
+    write_field!(
+        w,
+        "SPDXID: {}",
+        doc.document_creation_information.spdx_identifier
+    );
+    write_field!(
+        w,
+        "DocumentName: {}",
+        doc.document_creation_information.document_name
+    );
+    write_field!(
+        w,
+        "DocumentNamespace: {}",
+        doc.document_creation_information.spdx_document_namespace
+    );
+    //write_field!(@all, w, "ExternalDocumentRef: {}", doc.document_creation_information.external_document_references);
+    write_field!(@opt, w, "LicenseListVersion: {}", doc.document_creation_information.creation_info.license_list_version);
+    write_field!(@all, w, "Creator: {}", doc.document_creation_information.creation_info.creators);
+    write_field!(
+        w,
+        "Created: {}",
+        doc.document_creation_information.creation_info.created
+    );
+    write_field!(@opt, w, "CreatorComment: {}", doc.document_creation_information.creation_info.creator_comment);
+    write_field!(@opt, w, "DocumentComment: {}", doc.document_creation_information.document_comment);
 
     Ok(())
 }

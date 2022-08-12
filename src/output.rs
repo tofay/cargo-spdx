@@ -1,9 +1,8 @@
 //! Handle outputting the document to the user.
 
-use crate::document::Document;
 use crate::{format, Format};
 use anyhow::{anyhow, Result};
-use std::ffi::OsStr;
+use spdx_rs::models::SPDX;
 use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::ops::Not as _;
@@ -13,7 +12,7 @@ use std::path::{Path, PathBuf};
 #[derive(Debug)]
 pub struct OutputManager {
     /// The path to be written to.
-    to: PathBuf,
+    pub to: PathBuf,
     /// The format to write the output in.
     format: Format,
     /// Whether output is being forced.
@@ -27,22 +26,9 @@ impl OutputManager {
         OutputManager { to, format, force }
     }
 
-    /// Get the name of the output file.
-    #[inline]
-    pub fn output_file_name(&self) -> String {
-        // If there's no file, we have an empty `OsStr`, which is fine because we won't
-        // write out anything anyway (this condition is checked during writing, and we error
-        // out if there's no file name in the output path).
-        self.to
-            .file_name()
-            .unwrap_or_else(|| OsStr::new(""))
-            .to_string_lossy()
-            .to_string()
-    }
-
     /// Write the document to the output file in the specified format.
     #[inline]
-    pub fn write_document(&self, doc: &Document) -> Result<()> {
+    pub fn write_document(&self, doc: &SPDX) -> Result<()> {
         // Check the output file has a file name and isn't a directory.
         if self.to.file_name().is_none() {
             return Err(anyhow!("missing output file name"));

@@ -12,6 +12,8 @@ use anyhow::Result;
 use build::build;
 use cargo_metadata::MetadataCommand;
 use clap::Parser;
+use document::get_creation_info;
+use spdx_rs::models::{DocumentCreationInformation, SPDX};
 use std::path::PathBuf;
 
 mod build;
@@ -53,11 +55,28 @@ fn main() -> Result<()> {
             OutputManager::new(&path, args.force(), args.format())
         };
 
-        let doc = document::builder(
-            args.host_url()?.as_ref(),
-            &output_manager.output_file_name(),
-        )?
-        .build()?;
+        let document_creation_information = DocumentCreationInformation {
+            document_name: output_manager
+                .to
+                .file_name()
+                .unwrap()
+                .to_string_lossy()
+                .to_string(),
+            creation_info: get_creation_info()?,
+            spdx_document_namespace: args.host_url()?.to_string(),
+            ..Default::default()
+        };
+
+        let doc = SPDX {
+            document_creation_information,
+            package_information: Vec::new(),
+            other_licensing_information_detected: Vec::new(),
+            file_information: Vec::new(),
+            snippet_information: Vec::new(),
+            relationships: Vec::new(),
+            annotations: Vec::new(),
+            spdx_ref_counter: 0,
+        };
         output_manager.write_document(&doc)?;
     }
     Ok(())

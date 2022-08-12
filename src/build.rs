@@ -1,12 +1,16 @@
 //! Implements `cargo spdx build` subcommand
 
-use crate::document::{self, File, Package, Relationship, RelationshipType};
+use crate::document::{get_creation_info, FileInformationExt, PackageInformationExt};
 use crate::format::Format;
 use crate::output::OutputManager;
 use anyhow::Result;
 use cargo_metadata::camino::Utf8PathBuf;
 use cargo_metadata::{Artifact, Metadata, MetadataCommand, PackageId};
 use clap::Parser;
+use spdx_rs::models::{
+    DocumentCreationInformation, FileInformation, PackageInformation, Relationship,
+    RelationshipType,
+};
 use std::collections::HashMap;
 use std::ffi::OsString;
 use std::io::{BufRead, BufReader};
@@ -31,7 +35,7 @@ struct CargoBuild {
 #[derive(Debug, Default)]
 struct CargoBuildInfo {
     /// packages identified from cargo json messages
-    packages: HashMap<PackageId, Package>,
+    packages: HashMap<PackageId, PackageInformation>,
     /// binaries identifed from cargo json messages
     binaries: Vec<(Utf8PathBuf, PackageId)>,
 }
@@ -137,9 +141,10 @@ fn process_json_messages(
             // Identify dependent packages
             let package = &metadata[&artifact.package_id];
             if !collector.packages.contains_key(&artifact.package_id) {
-                collector
-                    .packages
-                    .insert(artifact.package_id.clone(), package.into());
+                collector.packages.insert(
+                    artifact.package_id.clone(),
+                    PackageInformation::from_metadata_package(package),
+                );
             }
 
             // Identify executables
@@ -156,7 +161,7 @@ fn process_json_messages(
 // Create SBOM for each binary and output it alongside the binary
 fn produce_sbom(
     binary: cargo_metadata::camino::Utf8PathBuf,
-    packages: &HashMap<PackageId, Package>,
+    packages: &HashMap<PackageId, PackageInformation>,
     package_id: &PackageId,
     host_url: &str,
     format: Format,
@@ -164,14 +169,18 @@ fn produce_sbom(
     let mut relationships = Vec::new();
 
     // Create file information
-    let file = File::try_from_binary(&binary)?;
+    let file = FileInformation::try_from_binary(&binary)?;
 
     // Indicate the crate the binary was generated from
     relationships.push(Relationship {
         comment: None,
-        related_spdx_element: packages.get(package_id).unwrap().spdxid.clone(),
+        related_spdx_element: packages
+            .get(package_id)
+            .unwrap()
+            .package_spdx_identifier
+            .clone(),
         relationship_type: RelationshipType::GeneratedFrom,
-        spdx_element_id: file.spdxid.clone(),
+        spdx_element_id: file.file_spdx_identifier.clone(),
     });
 
     // Add all crates as dependencies of the binary
@@ -180,10 +189,10 @@ fn produce_sbom(
     // without the user doing a build per binary)
     relationships.extend(packages.values().map(|package| Relationship {
         comment: None,
-        related_spdx_element: package.spdxid.clone(),
+        related_spdx_element: package.package_spdx_identifier.clone(),
         // Is this the best fit? Should the file indicate that it statically links the crate?
         relationship_type: RelationshipType::DependsOn,
-        spdx_element_id: file.spdxid.clone(),
+        spdx_element_id: file.file_spdx_identifier.clone(),
     }));
 
     // Create the SBOM and write it out
@@ -196,12 +205,26 @@ fn produce_sbom(
         )
         .trim_start_matches('.'),
     );
+
+    let document_creation_information = DocumentCreationInformation {
+        document_name: spdx_path.file_name().unwrap().to_string(),
+        creation_info: get_creation_info()?,
+        spdx_document_namespace: host_url.to_string(),
+        ..Default::default()
+    };
+
+    let doc = spdx_rs::models::SPDX {
+        document_creation_information,
+        package_information: packages.values().cloned().collect(),
+        other_licensing_information_detected: Vec::new(),
+        file_information: vec![file],
+        snippet_information: Vec::new(),
+        relationships,
+        annotations: Vec::new(),
+        spdx_ref_counter: 0,
+    };
+
     let output_manager = OutputManager::new(&spdx_path.into_std_path_buf(), true, format);
-    let doc = document::builder(host_url, &output_manager.output_file_name())?
-        .files(vec![file])
-        .packages(packages.values().cloned().collect())
-        .relationships(relationships)
-        .build()?;
     output_manager.write_document(&doc)?;
     Ok(())
 }
